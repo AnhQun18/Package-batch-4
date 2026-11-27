@@ -29,27 +29,36 @@ __all__ = ["plot_categorical"]
 # 1. VẼ
 # ======================================================================
 def plot_categorical(df: pd.DataFrame, cols: Columns = None, *, exclude: Sequence[str] | None = None,
+                     kind: Literal["bar", "pie"] = "bar",
                      top_n: int | None = 20, normalize: bool = False, show_other: bool = True,
                      other_label: str = "(other)", sort: Literal["count", "value"] | None = "count",
                      orient: Literal["v", "h"] = "v", label_rotation: float | None = None, ncols: int = 3,
                      ax: Axes | Sequence[Axes] | None = None, figsize: tuple[float, float] | None = None,
                      subplot_kws: Mapping[str, Any] | None = None, title: str | None = None,
                      col_title: str | None = None, **kwargs: Any) -> tuple[Figure, pd.DataFrame]:
-    """Bar chart tần suất (seaborn.barplot), mỗi cột một ô.
+    """Chart tần suất, mỗi cột một ô: bar (seaborn.barplot) hoặc pie (matplotlib).
 
     Cột hợp lệ khi cols=None: dtype category, object, string, bool. Truyền cols tường minh thì nhận
         mọi cột có giá trị hash được (vd cột số nguyên mã hóa nhóm).
+    kind: "bar" hoặc "pie". Pie: nhãn ghi tỷ lệ %, **kwargs chuyển cho Axes.pie (colors, startangle,
+        wedgeprops...); normalize, orient, label_rotation không có tác dụng. Pie nên dùng top_n nhỏ (vd 5-8).
     top_n: số category mỗi ô, chọn theo tần suất lớn nhất; None = tất cả.
     normalize: False = trục là count, True = proportion (trên giá trị không thiếu).
-    show_other / other_label: gộp phần ngoài top_n thành một cột với nhãn `other_label`.
+    show_other / other_label: gộp phần ngoài top_n thành một cột/lát với nhãn `other_label` (pie tô xám).
     sort: thứ tự hiển thị: "count" giảm dần theo tần suất, "value" theo giá trị, None = thứ tự xuất hiện.
+        Với pie luôn là "count" (bỏ qua giá trị truyền vào).
     orient: "v" bar đứng, "h" bar ngang. label_rotation: góc xoay nhãn category; None = mặc định.
     Trả về: (Figure, long) với long gồm `column, value, count, proportion` đúng như đã vẽ.
     Raises DatasetError: như plot_numeric; thêm top_n < 1, sort/orient sai, giá trị không hash được,
         other_label trùng một category có thật, nhãn category trùng nhau sau khi chuyển thành chuỗi.
     """
+    if kind not in ("bar", "pie"):
+        raise DatasetError(f"kind phải là 'bar' hoặc 'pie', nhận {kind!r}.")
     if orient not in ("v", "h"):
         raise DatasetError(f"orient phải là 'v' hoặc 'h', nhận {orient!r}.")
+    _, sns = _require_plotting()
+    if kind == "pie":
+        sort = "count"  # pie luôn sắp theo tần suất giảm dần, (other) ở cuối
     long, info = _categorical_data(df, cols, exclude=exclude, top_n=top_n, show_other=show_other,
                                    other_label=other_label, sort=sort)
     measure = "proportion" if normalize else "count"
@@ -66,13 +75,24 @@ def plot_categorical(df: pd.DataFrame, cols: Columns = None, *, exclude: Sequenc
             if len(set(labels)) != len(labels):
                 raise DatasetError(f"Cột '{col}': các category trùng nhãn sau khi chuyển thành chuỗi (vd 1 và '1'). "
                                    "Đồng nhất kiểu dữ liệu của cột trước.")
-            if orient == "v":
+            if kind == "pie":
+                kw = dict(kwargs)
+                kw.setdefault("autopct", "%1.1f%%")
+                kw.setdefault("startangle", 90)
+                kw.setdefault("counterclock", False)
+                wedges = axis.pie(sub["count"].to_numpy(), labels=labels, **kw)[0]
+                if show_other and "colors" not in kw:
+                    for w, v in zip(wedges, sub["value"]):
+                        if v == other_label:
+                            w.set_facecolor("lightgray")
+                axis.set_aspect("equal")
+            elif orient == "v":
                 sns.barplot(x=labels, y=sub[measure].to_numpy(), order=labels, ax=axis, **kwargs)
                 axis.set_ylabel(measure)
             else:
                 sns.barplot(y=labels, x=sub[measure].to_numpy(), order=labels, orient="h", ax=axis, **kwargs)
                 axis.set_xlabel(measure)
-            if label_rotation is not None:
+            if kind == "bar" and label_rotation is not None:
                 axis.tick_params(axis="x" if orient == "v" else "y", labelrotation=label_rotation)
         auto = f"{col}\nn={row['n']:,} · missing={row['missing']:,} · categories={row['cardinality']:,}"
         _apply_labels(fig, axis, title=title, col_title=col_title, info=row, auto_title=auto)
