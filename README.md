@@ -100,8 +100,15 @@ Package được chia thành 5 module rõ ràng trong `rfm_fe/`:
 
 ---
 
-## 5. Chạy kiểm thử (Tests)
+## 5. Notebooks minh họa (kèm sẵn output)
+
+- [notebooks/01_rfm_feature_exploration.ipynb](notebooks/01_rfm_feature_exploration.ipynb): Tạo dữ liệu mẫu `df` (100.000 dòng), liệt kê toàn bộ các biến mới được sinh ra theo từng nhóm, hiển thị bảng dữ liệu từng nhóm, đối chiếu số liệu tay của 1 khách hàng (`CUST_00001`) và thống kê mô tả.
+- [notebooks/02_train_test_and_models.ipynb](notebooks/02_train_test_and_models.ipynb): So sánh 4 chiến lược xử lý giá trị âm (`keep`, `clip_zero`, `drop`, `separate`), kiểm thử Customer Split & Out-of-Time Split, và huấn luyện thử với `RandomForestClassifier`, `LogisticRegression` và `KMeans`.
+
+---
+
+## 6. Chạy kiểm thử (Tests)
 
 ```bash
-pytest -v
+python -m pytest -v
 ```
