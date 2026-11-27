@@ -1,0 +1,6 @@
+pandas>=2.0
+numpy>=1.24
+scikit-learn>=1.2
+openpyxl>=3.1      # đọc Excel (.xlsx)
+pyarrow>=12.0      # đọc Parquet
+pytest>=7.0        # chạy test
