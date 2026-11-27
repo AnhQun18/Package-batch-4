@@ -1,8 +1,8 @@
 # Package-batch-4
 
-QC & EDA: Hùng
+QC & EDA & Modeling: Hùng
 
-Data Processing: Kiên
+Data Processing & Monitoring model: Kiên
 
 Feature Engineering & Feature Selection: Quân
 
