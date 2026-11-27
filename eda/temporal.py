@@ -16,8 +16,7 @@ import numpy as np
 import pandas as pd
 from pandas.api import types as pdt
 
-from ..dataset import DatasetError
-from ._common import (Columns, _apply_labels, _make_grid, _no_data, _require_plotting, _select_columns)
+from ._common import (DatasetError, Columns, _apply_labels, _make_grid, _no_data, _require_plotting, _select_columns)
 
 if TYPE_CHECKING:
     from matplotlib.axes import Axes

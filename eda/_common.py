@@ -11,7 +11,11 @@ from typing import TYPE_CHECKING, Any, Callable, Mapping, Sequence
 import numpy as np
 import pandas as pd
 
-from ..dataset import DatasetError
+try:  # khi nằm trong ds_kit dùng chung lỗi của dataset
+    from ..dataset import DatasetError
+except ImportError:  # chạy độc lập
+    class DatasetError(ValueError):
+        """Đầu vào không hợp lệ."""
 
 if TYPE_CHECKING:  # chỉ cho type hint; không bắt buộc cài matplotlib để import module
     from matplotlib.axes import Axes

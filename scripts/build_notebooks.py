@@ -1,5 +1,6 @@
 """Script sinh ra các Jupyter Notebooks (.ipynb) kiểm thử package `qc`."""
 import json
+import re
 from pathlib import Path
 
 
@@ -443,7 +444,157 @@ expect_dataset_error(plot_entity_coverage, sample_time_df, entity="id", time="dt
     build_notebook(cells, out_path)
 
 
+def generate_eda_qc_demo_notebook(out_path: Path):
+    cells = [
+        create_cell("markdown", """# Chạy thử `eda` và `qc` trên dữ liệu giả lập
+
+- **`eda`**: nhìn nhanh phân phối từng loại cột: `plot_numeric`, `plot_categorical` (bar, pie), `plot_temporal`.
+- **`qc`**: kiểm tra chất lượng dữ liệu, mỗi khía cạnh một hàm: `plot_missing`, `plot_duplicate`, `plot_outlier_rate`, `plot_entity_coverage`.
+
+Cả hai đều trả về `(Figure, DataFrame)`: figure để xem, bảng là số liệu đằng sau chart.
+"""),
+        create_cell("code", """import sys
+from pathlib import Path
+
+import matplotlib
+matplotlib.use("Agg")  # không phụ thuộc backend của kernel; figure được hiện bằng show(fig)
+import matplotlib.pyplot as plt
+import pandas as pd
+from io import BytesIO
+from IPython.display import Image, display
+
+repo_root = Path.cwd().resolve()
+if not (repo_root / "eda").exists():  # đang chạy từ notebooks/
+    repo_root = repo_root.parent
+if str(repo_root) not in sys.path:
+    sys.path.insert(0, str(repo_root))
+
+from eda import plot_numeric, plot_categorical, plot_temporal
+from qc import plot_missing, plot_duplicate, plot_outlier_rate, plot_entity_coverage
+
+pd.set_option("display.max_columns", None)
+pd.set_option("display.width", 1000)
+
+
+def show(fig):
+    # Hiện figure dưới dạng ảnh PNG (chạy đúng với mọi backend), rồi đóng figure
+    buf = BytesIO()
+    fig.savefig(buf, format="png", dpi=100, bbox_inches="tight")
+    plt.close(fig)
+    display(Image(buf.getvalue()))
+"""),
+        create_cell("code", """df = pd.read_csv(repo_root / "data" / "mock_transactions.csv", parse_dates=["order_date"])
+print(f"{df.shape[0]:,} dòng x {df.shape[1]} cột")
+display(df.head())
+display(df.dtypes.to_frame("dtype").T)
+"""),
+        create_cell("markdown", """---
+# Phần 1. EDA
+
+## 1.1. `plot_numeric`: cột số
+
+Mặc định `cols=None` lấy mọi cột số, mỗi cột một ô. Bỏ `metric_with_inf` (chứa ±inf) và `internal_device_token` (toàn thiếu) để chart gọn.
+"""),
+        create_cell("code", """fig, long = plot_numeric(df, exclude=["metric_with_inf", "internal_device_token"], ncols=3)
+display(long.head())
+"""),
+        create_cell("markdown", """Nhiều loại chart cho cùng một cột: `kind` nhận list, mỗi kind một ô.
+"""),
+        create_cell("code", """fig, long = plot_numeric(df, cols="total_amount", kind=["hist", "box", "kde", "violin", "ecdf"], ncols=5, figsize=(20, 3.5))
+"""),
+        create_cell("markdown", """## 1.2. `plot_categorical`: cột phân loại
+
+`top_n` chọn N category phổ biến nhất, phần còn lại gộp vào `(other)`.
+"""),
+        create_cell("code", """fig, long = plot_categorical(df, cols=["payment_method", "order_status", "shipping_region"], top_n=5, ncols=3)
+display(long)
+"""),
+        create_cell("markdown", """### Pie chart
+
+`kind="pie"` luôn sắp theo tần suất giảm dần, `(other)` nằm cuối và tô xám. Dùng `top_n` nhỏ (5-8); pie chỉ hợp với cột ít category và phân bố lệch.
+"""),
+        create_cell("code", """fig, long = plot_categorical(df, cols=["payment_method", "order_status"], kind="pie", top_n=3, ncols=2, figsize=(11, 5))
+display(long)
+"""),
+        create_cell("markdown", """## 1.3. `plot_temporal`: cột thời gian
+
+Số record theo kỳ (`freq="M"`) và theo chu kỳ (thứ trong tuần, tháng, giờ, heatmap thứ x giờ).
+"""),
+        create_cell("code", """fig, long = plot_temporal(df, kind=["line", "bar", "cumulative"], freq="M", ncols=3, figsize=(18, 3.5))
+display(long.head())
+"""),
+        create_cell("code", """fig, long = plot_temporal(df, kind=["weekday", "month", "hour", "heatmap"], ncols=4, figsize=(20, 3.8))
+"""),
+        create_cell("markdown", """---
+# Phần 2. QC
+
+Quy ước chung: tỷ lệ là số `0-1`; `min_*` lọc bớt cột nhẹ khỏi bảng lẫn chart; `threshold` tô đỏ phần vượt ngưỡng (không điền thì không tô) và bảng có thêm cột `exceed`.
+
+## 2.1. `plot_missing`
+"""),
+        create_cell("code", """fig, table = plot_missing(df, threshold=0.2)
+display(table)
+"""),
+        create_cell("markdown", """Chỉ hiện cột thiếu từ 1% trở lên (`min_missing`):
+"""),
+        create_cell("code", """fig, table = plot_missing(df, min_missing=0.01, threshold=0.2)
+display(table)
+"""),
+        create_cell("markdown", """## 2.2. `plot_duplicate`
+
+Truyền dict `{tên: cột}` để so nhiều định nghĩa trùng trong một chart.
+"""),
+        create_cell("code", """fig, table = plot_duplicate(
+    df,
+    subset={
+        "toàn bộ dòng": list(df.columns),
+        "order_id": "order_id",
+        "customer_id + order_date": ["customer_id", "order_date"],
+    },
+    threshold=0.01,
+)
+display(table)
+"""),
+        create_cell("markdown", """## 2.3. `plot_outlier_rate`
+
+So sánh 3 phương pháp trên cùng bộ cột bằng cách truyền `ax`. `min_rate` ẩn cột không có outlier.
+"""),
+        create_cell("code", """fig, axes = plt.subplots(1, 3, figsize=(18, 4))
+tables = {}
+for ax, method in zip(axes, ["iqr", "zscore", "mad"]):
+    _, tables[method] = plot_outlier_rate(df, method=method, min_rate=0.0001, threshold=0.05, ax=ax)
+fig.tight_layout()
+display(tables["iqr"])
+"""),
+        create_cell("markdown", """## 2.4. `plot_entity_coverage`
+
+`coverage` = số khách hàng có đơn trong kỳ / tổng số khách hàng của cả bảng. Kỳ không có đơn nào vẫn hiện với giá trị 0. Kỳ có coverage dưới `threshold` bị tô đỏ.
+"""),
+        create_cell("code", """fig, table = plot_entity_coverage(df, entity="customer_id", time="order_date", freq="M", threshold=0.3)
+display(table)
+"""),
+        create_cell("markdown", """## 2.5. Ghép thành một dashboard
+
+Mọi hàm nhận `ax` nên có thể đặt vào cùng một figure.
+"""),
+        create_cell("code", """fig, axes = plt.subplots(2, 2, figsize=(14, 9))
+plot_missing(df, min_missing=0.01, threshold=0.2, ax=axes[0, 0])
+plot_duplicate(df, {"toàn bộ dòng": list(df.columns), "order_id": "order_id"}, threshold=0.01, ax=axes[0, 1])
+plot_outlier_rate(df, min_rate=0.0001, threshold=0.05, ax=axes[1, 0])
+plot_entity_coverage(df, "customer_id", "order_date", threshold=0.3, ax=axes[1, 1])
+fig.suptitle("Data Quality overview")
+fig.tight_layout()
+"""),
+    ]
+    for cell in cells:  # mỗi cell tạo figure thì kết thúc bằng show(fig)
+        src = "".join(cell["source"])
+        if cell["cell_type"] == "code" and re.search(r"\bfig\b", src) and "def show" not in src:
+            cell["source"] = create_cell("code", src.rstrip("\n") + "\nshow(fig)")["source"]
+    build_notebook(cells, out_path)
+
+
 if __name__ == "__main__":
     nb_dir = Path(__file__).resolve().parent.parent / "notebooks"
+    generate_eda_qc_demo_notebook(nb_dir / "03_demo_eda_qc.ipynb")
     generate_pipeline_notebook(nb_dir / "01_test_qc_pipeline.ipynb")
     generate_edge_cases_notebook(nb_dir / "02_test_qc_edge_cases.ipynb")
