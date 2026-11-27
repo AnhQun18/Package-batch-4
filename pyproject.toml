@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "Packacge-batch-4"
+version = "0.1.0"
+description = "Data science toolkit"
+requires-python = ">=3.11"
+dependencies = ["pandas>=2.0", "numpy>=1.24"]
+
+[project.optional-dependencies]
+polars = ["polars>=0.20"]
+excel = ["openpyxl"]
+viz = ["matplotlib>=3.7", "seaborn>=0.13"]
+dev = ["pytest", "matplotlib>=3.7", "seaborn>=0.13"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
