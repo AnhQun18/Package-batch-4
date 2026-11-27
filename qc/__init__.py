@@ -17,7 +17,6 @@ Nguyên tắc:
     - Không sửa df, không plt.show(), không lưu file.
     - matplotlib/seaborn chỉ import khi vẽ (optional dependency `viz`).
 """
-from .plot_coverage import plot_entity_coverage
 from .plot_duplicate import plot_duplicate
 from .plot_missing import plot_missing
 from .plot_outlier import plot_outlier_rate
