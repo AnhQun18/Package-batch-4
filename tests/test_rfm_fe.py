@@ -136,6 +136,34 @@ def test_works_with_tree_and_linear_models(sample_df: pd.DataFrame) -> None:
     assert lr.predict(feat_linear).shape == (4,)
 
 
+def test_out_of_time_transform_and_override(sample_df: pd.DataFrame) -> None:
+    train_df = sample_df[sample_df["tx_date"] <= "2026-02-15"].copy()
+    future_df = sample_df[sample_df["tx_date"] > "2026-02-15"].copy()
+
+    # Auto snapshot on out-of-time window when reference_date=None
+    fe_auto = RFMFeatureEngineer(
+        customer_col="user_id",
+        date_col="tx_date",
+        amount_col="price",
+        scaler="standard",
+    )
+    X_tr = fe_auto.fit_transform(train_df)
+    X_te = fe_auto.transform(future_df)
+    assert list(X_tr.columns) == list(X_te.columns)
+    assert len(X_te) > 0
+
+    # Explicit reference_date override on transform()
+    fe_fixed = RFMFeatureEngineer(
+        customer_col="user_id",
+        date_col="tx_date",
+        amount_col="price",
+        reference_date="2026-02-16",
+    )
+    fe_fixed.fit(train_df)
+    X_te_override = fe_fixed.transform(future_df, reference_date="2026-03-21")
+    assert len(X_te_override) > 0
+
+
 def test_missing_columns_raises_value_error(sample_df: pd.DataFrame) -> None:
     with pytest.raises(ValueError, match="Missing required column"):
         engineer_rfm_features(sample_df, customer_col="non_existent")

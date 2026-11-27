@@ -52,6 +52,9 @@ fe = RFMFeatureEngineer(
 
 X_train = fe.fit_transform(train_df)
 X_test = fe.transform(test_df)
+
+# Nếu chia tập Out-of-Time (tập test ở tương lai), có thể truyền reference_date mới khi transform:
+# X_test_oot = fe.transform(future_df, reference_date="2026-06-30")
 ```
 
 ---

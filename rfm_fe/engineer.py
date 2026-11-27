@@ -182,16 +182,45 @@ class RFMFeatureEngineer(BaseEstimator, TransformerMixin):
         self.feature_names_out_: List[str] = list(features.columns)
         return self
 
-    def transform(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Transform transactional DataFrame into a customer-level feature matrix."""
+    def transform(
+        self,
+        df: pd.DataFrame,
+        reference_date: Optional[Union[str, pd.Timestamp]] = None,
+    ) -> pd.DataFrame:
+        """Transform transactional DataFrame into a customer-level feature matrix.
+
+        Parameters
+        ----------
+        df : pd.DataFrame
+            Transactional input DataFrame.
+        reference_date : str or pd.Timestamp, optional
+            Snapshot date override for out-of-time evaluation. If omitted:
+            uses the fitted ``self.reference_date_`` when transactions exist
+            on/before it, or falls back to ``max(date_col) + 1 day`` when
+            ``self.reference_date`` was ``None`` and ``df`` is a future window.
+        """
         if not hasattr(self, "config_"):
             raise RuntimeError(
                 "RFMFeatureEngineer must be fitted before calling transform()."
             )
 
         config = self.config_
+        effective_ref = (
+            pd.Timestamp(reference_date)
+            if reference_date is not None
+            else self.reference_date_
+        )
+
+        # Support out-of-time transform when user did not lock config.reference_date
+        if reference_date is None and config.reference_date is None:
+            parsed_dates = pd.to_datetime(df[config.date_col], errors="coerce")
+            if getattr(parsed_dates.dt, "tz", None) is not None:
+                parsed_dates = parsed_dates.dt.tz_convert(None)
+            if parsed_dates.min() > self.reference_date_:
+                effective_ref = None  # let validate_and_prepare use max(date) + 1d
+
         clean_df, ref_date, refund_df = validate_and_prepare(
-            df, config, reference_date=self.reference_date_
+            df, config, reference_date=effective_ref
         )
 
         features = self._build_raw_features(clean_df, config, ref_date, refund_df)
